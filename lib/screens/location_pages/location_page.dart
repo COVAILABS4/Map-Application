@@ -3,6 +3,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:map_app/services/api_service.dart';
 import 'package:map_launcher/map_launcher.dart';
+import 'package:intl/intl.dart';
 
 class LocationPage extends StatefulWidget {
   final String userId;
@@ -76,20 +77,29 @@ class _UpdateLocationPageState extends State<LocationPage> {
       );
     }
 
+    String formatDate(String timestamp) {
+      // Parse the timestamp string to a DateTime object
+      DateTime dateTime = DateTime.parse(timestamp);
+
+      // Use DateFormat to format the DateTime object to the desired format
+      String formattedDate = DateFormat('dd/MM/yyyy HH:MM:SS').format(dateTime);
+
+      return formattedDate;
+    }
+
     final String name = locationData!['locationName'];
     final List geoaxis = locationData!['geoaxis'];
 
-    final String startTime =
-        geoaxis.first['timestamp'].toString().split(" ").last;
-    final String endTime = geoaxis.last['timestamp'].toString().split(" ").last;
-    final String date = geoaxis.first['timestamp'].toString().split(" ").first;
+    final String startTime = formatDate(geoaxis.first['timestamp']);
+    final String endTime = formatDate(geoaxis.last['timestamp']);
+    // final String date = geoaxis.first['timestamp'].toString().split(" ").first;
 
     final List<Coords> pathPoints = geoaxis
         .map((point) => Coords(point['latitude'], point['longitude']))
         .toList();
 
     return Scaffold(
-      appBar: AppBar(title: Text("Update Location")),
+      appBar: AppBar(title: Text("Location")),
       body: Column(
         children: [
           Padding(
@@ -97,11 +107,11 @@ class _UpdateLocationPageState extends State<LocationPage> {
             child: Container(
               padding: EdgeInsets.symmetric(vertical: 10, horizontal: 15),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.8),
+                color: Colors.white.withOpacity(0.2),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Text(
-                'Name: $name \n Start Time: $startTime End Time: $endTime \n Date: $date',
+                'Name: $name \n Start Time: $startTime \n End Time: $endTime \n',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,

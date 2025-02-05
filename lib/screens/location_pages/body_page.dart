@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../../services/api_service.dart';
 import 'location_page.dart';
 
+import 'package:intl/intl.dart';
+
 class BodyPage extends StatefulWidget {
   final String userId;
   BodyPage({required this.userId});
@@ -12,6 +14,7 @@ class BodyPage extends StatefulWidget {
 
 class _BodyPageState extends State<BodyPage> {
   List<dynamic> locations = [];
+  bool isLoading = true; // Track loading state
 
   @override
   void initState() {
@@ -20,12 +23,19 @@ class _BodyPageState extends State<BodyPage> {
   }
 
   Future<void> loadLocations() async {
-    print("hello World  ${widget.userId}");
+    setState(() {
+      isLoading = true; // Set loading to true when starting to load data
+    });
 
     List<dynamic>? data = await ApiService.getUserLocations(widget.userId);
     if (data != null) {
       setState(() {
         locations = data;
+        isLoading = false; // Set loading to false when data is loaded
+      });
+    } else {
+      setState(() {
+        isLoading = false; // Set loading to false if no data is returned
       });
     }
   }
@@ -102,10 +112,22 @@ class _BodyPageState extends State<BodyPage> {
     );
   }
 
+  String formatDate(String timestamp) {
+    // Parse the timestamp string to a DateTime object
+    DateTime dateTime = DateTime.parse(timestamp);
+
+    // Use DateFormat to format the DateTime object to the desired format
+    String formattedDate = DateFormat('dd/MM/yyyy HH:MM:SS').format(dateTime);
+
+    return formattedDate;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
+        backgroundColor: Colors.white,
         title: Text(
           "Locations",
           textAlign: TextAlign.center,
@@ -114,50 +136,57 @@ class _BodyPageState extends State<BodyPage> {
           IconButton(onPressed: loadLocations, icon: Icon(Icons.restart_alt))
         ],
       ),
-      body: locations.isEmpty
-          ? Center(child: Text("Location is Empty"))
-          : ListView.builder(
-              padding: EdgeInsets.all(10),
-              itemCount: locations.length,
-              itemBuilder: (context, index) {
-                var location = locations[index];
-                return Card(
-                  elevation: 3,
-                  margin: EdgeInsets.symmetric(vertical: 8),
-                  child: ListTile(
-                    leading: Icon(Icons.location_on, color: Colors.blueAccent),
-                    title: Text(location["locationName"],
-                        style: TextStyle(
-                            fontSize: 18, fontWeight: FontWeight.bold)),
-                    subtitle: Text("ID: ${location["_id"]}"),
-                    trailing: Wrap(
-                      spacing: 10,
-                      children: [
-                        IconButton(
-                          icon: Icon(Icons.edit, color: Colors.green),
-                          onPressed: () => showUpdateDialog(
-                              location["_id"], location["locationName"]),
+      body: isLoading
+          ? Center(
+              child: Image.asset(
+                  'assets/giffs/loader.gif'), // Show GIF while loading
+            )
+          : locations.isEmpty
+              ? Center(child: Text("Location is Empty"))
+              : ListView.builder(
+                  padding: EdgeInsets.all(10),
+                  itemCount: locations.length,
+                  itemBuilder: (context, index) {
+                    var location = locations[index];
+                    return Card(
+                      elevation: 3,
+                      margin: EdgeInsets.symmetric(vertical: 8),
+                      child: ListTile(
+                        leading:
+                            Icon(Icons.location_on, color: Colors.blueAccent),
+                        title: Text(location["locationName"],
+                            style: TextStyle(
+                                fontSize: 18, fontWeight: FontWeight.bold)),
+                        subtitle: Text(formatDate(
+                            "${location["geoaxis"][0]['timestamp']}")),
+                        trailing: Wrap(
+                          spacing: 10,
+                          children: [
+                            IconButton(
+                              icon: Icon(Icons.edit, color: Colors.green),
+                              onPressed: () => showUpdateDialog(
+                                  location["_id"], location["locationName"]),
+                            ),
+                            IconButton(
+                              icon: Icon(Icons.delete, color: Colors.red),
+                              onPressed: () => confirmDelete(location["_id"]),
+                            ),
+                          ],
                         ),
-                        IconButton(
-                          icon: Icon(Icons.delete, color: Colors.red),
-                          onPressed: () => confirmDelete(location["_id"]),
-                        ),
-                      ],
-                    ),
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => LocationPage(
-                              userId: widget.userId,
-                              locationId: location["_id"]),
-                        ),
-                      );
-                    },
-                  ),
-                );
-              },
-            ),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => LocationPage(
+                                  userId: widget.userId,
+                                  locationId: location["_id"]),
+                            ),
+                          );
+                        },
+                      ),
+                    );
+                  },
+                ),
     );
   }
 }

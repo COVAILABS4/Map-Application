@@ -4,48 +4,35 @@ import 'package:provider/provider.dart';
 import 'providers/user_provider.dart';
 import 'screens/dashboard_page.dart';
 import 'screens/auth/login_page.dart';
+import 'screens/loading_screen.dart'; // Add a loading screen
 import 'utils/shared_prefs.dart';
-import 'utils/location_service.dart'; // Add location service to handle permissions
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // Get the userId from SharedPrefs
-  String? userId = await SharedPrefs.getUserId();
-
-  // Check for permissions and location settings
-  bool locationEnabled = await LocationService.isLocationEnabled();
-  bool hasPermissions = await LocationService.hasLocationPermissions();
-
-  if (!locationEnabled) {
-    // Redirect user to enable location
-    await LocationService.openLocationSettings();
-  }
-
-  if (!hasPermissions) {
-    // Request location permissions
-    await LocationService.requestPermissions();
-  }
 
   runApp(
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (context) => UserProvider()),
       ],
-      child: MyApp(userId: userId),
+      child: MyApp(),
     ),
   );
 }
 
 class MyApp extends StatelessWidget {
-  final String? userId;
-  const MyApp({super.key, this.userId});
+  const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      theme: ThemeData(
+        splashColor: Colors.transparent, // Remove splash color globally
+        highlightColor: Colors.transparent, // Remove highlight color globally
+        focusColor: Colors.transparent, // Remove focus color globally
+      ),
       debugShowCheckedModeBanner: false,
-      home: userId != null ? DashboardPage() : LoginPage(),
+      home: LoadingScreen(), // Use a Loading screen first
     );
   }
 }
