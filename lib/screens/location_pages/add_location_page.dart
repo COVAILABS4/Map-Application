@@ -1,10 +1,12 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
+import 'dart:async';
+import '../../services/api_service.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:map_app/services/api_service.dart';
-import 'package:map_app/utils/shared_prefs.dart'; // Assuming this is your shared prefs helper class
+import 'package:map_app/screens/location_pages/geo_show.dart';
+import 'package:map_app/utils/shared_prefs.dart';
 
 class AddLocationPage extends StatefulWidget {
+  const AddLocationPage({super.key});
 
   @override
   _AddLocationPageState createState() => _AddLocationPageState();
@@ -12,117 +14,118 @@ class AddLocationPage extends StatefulWidget {
 
 class _AddLocationPageState extends State<AddLocationPage> {
   final TextEditingController locationController = TextEditingController();
-  late String? userId; // Store userId here
-  List<Map<String, dynamic>> geoaxis = []; // Stores location data
-  bool isTracking = false; // Flag to check if location tracking is active
+  String? userId; // Store userId here
+  List<Map<String, dynamic>> geoaxis = [];
+  bool isTracking = false;
   Timer? locationTimer;
 
   // This method gets the userId asynchronously from SharedPrefs
   Future<void> _getUserId() async {
-    userId = await SharedPrefs.getUserId(); // Fetch the userId
+    String? fetchUid = await SharedPrefs.getUserId(); // Fetch the u  serId
+
+    setState(() {
+      userId = fetchUid;
+    });
     print("User ID: $userId"); // Log the userId to verify it
   }
 
   @override
   void initState() {
     super.initState();
-    _getUserId(); // Call the method to fetch userId when the page is loaded
+    _getUserId(); // Fetch userId when the page initializes
   }
 
   @override
   void dispose() {
-    locationTimer?.cancel(); // Cancel the timer when the widget is disposed
+    locationTimer?.cancel();
     super.dispose();
   }
 
-  // Start/Stop the location tracking
   void toggleTracking() {
     if (isTracking) {
-      locationTimer?.cancel(); // Stop the location tracking
-      setState(() {
-        isTracking = false;
-      });
+      locationTimer?.cancel();
+      setState(() => isTracking = false);
     } else {
       locationTimer = Timer.periodic(Duration(seconds: 2), (_) {
         _fetchAndStoreLocation();
       });
-      setState(() {
-        isTracking = true;
-      });
+      setState(() => isTracking = true);
     }
   }
 
-  // Function to fetch and store current location
   Future<void> _fetchAndStoreLocation() async {
-    // Check if location services are enabled
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text("Location services are disabled. Please enable them."),
-        backgroundColor: Colors.red,
-      ));
+      _showMessage("Location services are disabled.", Colors.red);
       return;
     }
 
-    // Check location permission
     LocationPermission permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text("Location permission denied. Please grant permission."),
-          backgroundColor: Colors.red,
-        ));
+        _showMessage("Location permission denied.", Colors.red);
         return;
       }
     }
 
-    // Get current location
     Position position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high);
+    String timestamp = DateTime.now().toIso8601String();
 
-    String timestamp = DateTime.now().toIso8601String(); // Current timestamp
-
-    // Store the location data
     if (mounted) {
-      // Ensure the widget is still mounted before calling setState
       setState(() {
         geoaxis.add({
           "latitude": position.latitude,
           "longitude": position.longitude,
           "timestamp": timestamp,
+          "name": locationController.text.trim(),
         });
       });
     }
-
-    print(
-        "Location saved: ${position.latitude}, ${position.longitude} at $timestamp"); // For verification
   }
 
-  // Save location to server
   Future<void> saveLocation() async {
-    userId =
-        await SharedPrefs.getUserId(); // Get userId from shared preferences
+    if (userId == null) {
+      _showMessage("User ID not found. Please try again.", Colors.red);
+      return;
+    }
 
-    if (geoaxis.isNotEmpty && userId != null && userId!.isNotEmpty) {
+    if (locationController.text.trim().isEmpty) {
+      _showMessage("Please enter a location name before saving.", Colors.red);
+      return;
+    }
+
+    if (geoaxis.isNotEmpty) {
       bool isSaved = await ApiService.saveLocation(
           userId!, locationController.text.trim(), geoaxis);
-
+      _showMessage(
+          isSaved ? "Location Saved Successfully!" : "Failed to Save Location",
+          isSaved ? Colors.green : Colors.red);
       if (isSaved) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text("Location Saved Successfully!"),
-            backgroundColor: Colors.green));
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text("Failed to Save Location"),
-            backgroundColor: Colors.red));
+        setState(() {
+          geoaxis.clear();
+          locationController.clear();
+        });
       }
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content:
-              Text("Please enter a location and ensure tracking is active"),
-          backgroundColor: Colors.red));
+      _showMessage(
+          "Please ensure tracking is active before saving.", Colors.red);
     }
+  }
+
+  void clearLocations() {
+    setState(() {
+      geoaxis.clear();
+      locationController.clear();
+    });
+    _showMessage("Location data cleared.", Colors.blue);
+  }
+
+  void _showMessage(String message, Color color) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: color),
+    );
   }
 
   @override
@@ -134,6 +137,9 @@ class _AddLocationPageState extends State<AddLocationPage> {
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
+            Expanded(
+              child: GeoShow(geoaxis: geoaxis),
+            ),
             TextField(
               controller: locationController,
               decoration: InputDecoration(
@@ -146,29 +152,45 @@ class _AddLocationPageState extends State<AddLocationPage> {
               ),
             ),
             SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: toggleTracking,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: isTracking ? Colors.red : Colors.green,
-                foregroundColor: Colors.white,
-                padding: EdgeInsets.symmetric(vertical: 14, horizontal: 30),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10)),
-              ),
-              child: Text(isTracking ? "Stop Tracking" : "Start Tracking",
-                  style: TextStyle(fontSize: 18)),
-            ),
+            Text("Location Count: ${geoaxis.length}",
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: saveLocation,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blueAccent,
-                foregroundColor: Colors.white,
-                padding: EdgeInsets.symmetric(vertical: 14, horizontal: 30),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10)),
-              ),
-              child: Text("Save Location", style: TextStyle(fontSize: 18)),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                ElevatedButton(
+                  onPressed: isTracking ? null : toggleTracking,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    foregroundColor: Colors.white,
+                  ),
+                  child: Text("Start"),
+                ),
+                ElevatedButton(
+                  onPressed: isTracking ? toggleTracking : null,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red,
+                    foregroundColor: Colors.white,
+                  ),
+                  child: Text("Stop"),
+                ),
+                ElevatedButton(
+                  onPressed: isTracking ? null : saveLocation,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blueAccent,
+                    foregroundColor: Colors.white,
+                  ),
+                  child: Text("Save"),
+                ),
+                ElevatedButton(
+                  onPressed: clearLocations,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.grey,
+                    foregroundColor: Colors.white,
+                  ),
+                  child: Text("Clear"),
+                ),
+              ],
             ),
           ],
         ),

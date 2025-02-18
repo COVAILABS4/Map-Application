@@ -10,6 +10,8 @@ class LoadingScreen extends StatefulWidget {
 }
 
 class _LoadingScreenState extends State<LoadingScreen> {
+  bool _isLoading = true;
+
   @override
   void initState() {
     super.initState();
@@ -19,19 +21,21 @@ class _LoadingScreenState extends State<LoadingScreen> {
   Future<void> _initializeApp() async {
     String? userId = await SharedPrefs.getUserId();
 
-    // Request permissions in the background
+    // Check location permission
     bool locationEnabled = await LocationService.isLocationEnabled();
     bool hasPermissions = await LocationService.hasLocationPermissions();
 
-    if (!locationEnabled) {
-      await LocationService.openLocationSettings();
+    if (!locationEnabled || !hasPermissions) {
+      bool granted = await _requestLocationPermission();
+      if (!granted) {
+        setState(() {
+          _isLoading = false; // Stop loader and show error message
+        });
+        return;
+      }
     }
 
-    if (!hasPermissions) {
-      await LocationService.requestPermissions();
-    }
-
-    // Redirect to appropriate page after permissions
+    // Navigate to the next screen only if permissions are granted
     if (mounted) {
       Navigator.pushReplacement(
         context,
@@ -42,11 +46,48 @@ class _LoadingScreenState extends State<LoadingScreen> {
     }
   }
 
+  // Function to request location permission with UI interaction
+  Future<bool> _requestLocationPermission() async {
+    return await showDialog(
+      context: context,
+      barrierDismissible: false, // Prevent dismissing without action
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text("Permission Required"),
+          content: Text(
+            "This app requires location permission to continue. Please enable it.",
+          ),
+          actions: [
+            TextButton(
+              onPressed: () async {
+                Navigator.of(context).pop(false);
+              },
+              child: Text("Cancel"),
+            ),
+            TextButton(
+              onPressed: () async {
+                await LocationService.requestPermissions();
+                bool hasPermissions =
+                    await LocationService.hasLocationPermissions();
+                Navigator.of(context).pop(hasPermissions);
+              },
+              child: Text("Grant Permission"),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      body: Center(child: CircularProgressIndicator()), // Show loading UI
+      body: Center(
+        child: _isLoading
+            ? CircularProgressIndicator()
+            : Text("Permission denied. Please enable location to proceed."),
+      ),
     );
   }
 }
