@@ -10,32 +10,59 @@ class LoadingScreen extends StatefulWidget {
 }
 
 class _LoadingScreenState extends State<LoadingScreen> {
-  bool _isLoading = true;
+  bool _permissionGranted = false;
+  bool _permissionDenied = false; // Track permission denial
+  String _greeting = "";
+  IconData _icon = Icons.wb_sunny; // Default to sunny (day)
 
   @override
   void initState() {
     super.initState();
-    _initializeApp();
+    _checkPermissionStatus();
+    _setGreetingAndIcon();
   }
 
-  Future<void> _initializeApp() async {
-    String? userId = await SharedPrefs.getUserId();
+  // Set greeting and icon based on current time
+  void _setGreetingAndIcon() {
+    final currentTime = DateTime.now();
+    final hour = currentTime.hour;
 
-    // Check location permission
+    if (hour >= 5 && hour < 12) {
+      _greeting = "Good Morning";
+      _icon = Icons.wb_sunny; // Sun icon for morning
+    } else if (hour >= 12 && hour < 17) {
+      _greeting = "Good Afternoon";
+      _icon = Icons.wb_sunny; // Sun icon for afternoon
+    } else if (hour >= 17 && hour < 20) {
+      _greeting = "Good Evening";
+      _icon = Icons.nightlight_round; // Moon icon for evening
+    } else {
+      _greeting = "Good Night";
+      _icon = Icons.nightlight_round; // Moon icon for night
+    }
+
+    setState(() {});
+  }
+
+  Future<void> _checkPermissionStatus() async {
     bool locationEnabled = await LocationService.isLocationEnabled();
     bool hasPermissions = await LocationService.hasLocationPermissions();
 
-    if (!locationEnabled || !hasPermissions) {
-      bool granted = await _requestLocationPermission();
-      if (!granted) {
-        setState(() {
-          _isLoading = false; // Stop loader and show error message
-        });
-        return;
-      }
-    }
+    setState(() {
+      _permissionGranted = locationEnabled && hasPermissions;
+      _permissionDenied = !hasPermissions;
+    });
 
-    // Navigate to the next screen only if permissions are granted
+    if (_permissionGranted) {
+      _navigateToNextScreen();
+    } else if (_permissionDenied) {
+      _showPermissionAlert();
+    }
+  }
+
+  void _navigateToNextScreen() async {
+    String? userId = await SharedPrefs.getUserId();
+
     if (mounted) {
       Navigator.pushReplacement(
         context,
@@ -46,32 +73,24 @@ class _LoadingScreenState extends State<LoadingScreen> {
     }
   }
 
-  // Function to request location permission with UI interaction
-  Future<bool> _requestLocationPermission() async {
-    return await showDialog(
+  Future<void> _requestPermission() async {
+    await LocationService.requestPermissions();
+    await _checkPermissionStatus(); // Check status again after granting
+  }
+
+  void _showPermissionAlert() {
+    showDialog(
       context: context,
-      barrierDismissible: false, // Prevent dismissing without action
       builder: (BuildContext context) {
         return AlertDialog(
           title: Text("Permission Required"),
-          content: Text(
-            "This app requires location permission to continue. Please enable it.",
-          ),
+          content: Text("Please enable location to proceed."),
           actions: [
             TextButton(
-              onPressed: () async {
-                Navigator.of(context).pop(false);
+              onPressed: () {
+                Navigator.of(context).pop();
               },
-              child: Text("Cancel"),
-            ),
-            TextButton(
-              onPressed: () async {
-                await LocationService.requestPermissions();
-                bool hasPermissions =
-                    await LocationService.hasLocationPermissions();
-                Navigator.of(context).pop(hasPermissions);
-              },
-              child: Text("Grant Permission"),
+              child: Text("OK"),
             ),
           ],
         );
@@ -84,9 +103,35 @@ class _LoadingScreenState extends State<LoadingScreen> {
     return Scaffold(
       backgroundColor: Colors.white,
       body: Center(
-        child: _isLoading
-            ? CircularProgressIndicator()
-            : Text("Permission denied. Please enable location to proceed."),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              _greeting,
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            SizedBox(height: 20),
+            // Spinning icon that changes based on the time of day
+            AnimatedRotation(
+              turns: 1.0,
+              duration: Duration(seconds: 5), // 5 seconds for full rotation
+              child: Icon(
+                _icon,
+                size: 100,
+                color: Colors.orange,
+              ),
+            ),
+            SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: _requestPermission,
+              child: Text("GET STARTED"),
+            ),
+          ],
+        ),
       ),
     );
   }
